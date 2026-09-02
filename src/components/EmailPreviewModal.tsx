@@ -104,7 +104,7 @@ export const EmailPreviewModal: React.FC<EmailPreviewModalProps> = ({
             <div className="flex items-center">
               <span className="w-14 font-semibold text-slate-400">From:</span>
               <span className="font-medium text-slate-900 dark:text-slate-100">
-                Hassan Graphic &lt;{senderEmail || SENDER_EMAIL}&gt;
+                Graphics Punching &lt;{senderEmail || SENDER_EMAIL}&gt;
               </span>
             </div>
             <div className="flex items-center">

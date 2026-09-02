@@ -127,7 +127,7 @@ export const Header: React.FC<HeaderProps> = ({
                         <p className="text-[11px] text-slate-400 uppercase tracking-wider font-semibold">
                           Authenticated Sender
                         </p>
-                        <p className="text-sm font-medium text-white truncate">{authState.user.displayName || 'Hassan Graphic'}</p>
+                        <p className="text-sm font-medium text-white truncate">{authState.user.displayName || 'Graphics Punching'}</p>
                         <p className="text-xs text-indigo-300 font-mono truncate">{authState.user.email}</p>
                       </div>
 

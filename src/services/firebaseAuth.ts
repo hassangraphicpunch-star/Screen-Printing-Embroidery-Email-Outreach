@@ -19,23 +19,30 @@ export const SCOPES = [
   'https://www.googleapis.com/auth/userinfo.profile'
 ];
 
+export const TARGET_EMAIL = 'graphicspunching264@gmail.com';
+
 const provider = new GoogleAuthProvider();
 SCOPES.forEach((scope) => {
   provider.addScope(scope);
 });
 provider.setCustomParameters({
-  prompt: 'select_account'
+  prompt: 'select_account',
+  login_hint: TARGET_EMAIL
 });
 
-// Cache token in memory
-let cachedAccessToken: string | null = null;
-let isSigningIn = false;
+// Cache token in memory and local session
+const TOKEN_STORAGE_KEY = 'gp_gmail_access_token';
+const USER_STORAGE_KEY = 'gp_gmail_user_data';
 
-declare global {
-  interface Window {
-    google?: any;
+let cachedAccessToken: string | null = (() => {
+  try {
+    return sessionStorage.getItem(TOKEN_STORAGE_KEY) || null;
+  } catch {
+    return null;
   }
-}
+})();
+
+let isSigningIn = false;
 
 export interface AuthenticatedGoogleUser {
   uid: string;
@@ -44,94 +51,32 @@ export interface AuthenticatedGoogleUser {
   photoURL?: string | null;
 }
 
-/**
- * Direct Google Identity Services (GSI) Token Client OAuth
- * Bypasses Firebase Auth user table to directly request Google Workspace OAuth tokens.
- */
-export const signInWithGSI = async (): Promise<{ 
-  user: AuthenticatedGoogleUser; 
-  accessToken: string 
-}> => {
-  return new Promise((resolve, reject) => {
-    if (!window.google?.accounts?.oauth2) {
-      reject(new Error('Google Identity Services client is still loading. Please wait 2 seconds and try again.'));
-      return;
-    }
-
-    try {
-      const tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: firebaseConfig.oAuthClientId,
-        scope: SCOPES.join(' '),
-        callback: async (tokenResponse: any) => {
-          if (tokenResponse.error) {
-            console.error('GSI OAuth Error:', tokenResponse);
-            reject(new Error(tokenResponse.error_description || tokenResponse.error || 'Google authorization was not completed.'));
-            return;
-          }
-
-          const token = tokenResponse.access_token;
-          if (!token) {
-            reject(new Error('No access token returned by Google OAuth.'));
-            return;
-          }
-
-          cachedAccessToken = token;
-
-          // Fetch user profile information using the access token
-          let userInfo: AuthenticatedGoogleUser = {
-            uid: 'google_user_graphicspunching264',
-            displayName: 'Graphics Punching',
-            email: 'graphicspunching264@gmail.com',
-            photoURL: undefined
-          };
-
-          try {
-            const userRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-              headers: { Authorization: `Bearer ${token}` }
-            });
-            if (userRes.ok) {
-              const profile = await userRes.json();
-              userInfo = {
-                uid: profile.sub || 'google_user_graphicspunching264',
-                displayName: profile.name || profile.given_name || 'Graphics Punching',
-                email: profile.email || 'graphicspunching264@gmail.com',
-                photoURL: profile.picture
-              };
-            }
-          } catch (profileErr) {
-            console.warn('Could not fetch user profile details:', profileErr);
-          }
-
-          resolve({
-            user: userInfo,
-            accessToken: token
-          });
-        }
-      });
-
-      tokenClient.requestAccessToken({ prompt: 'select_account' });
-    } catch (err: any) {
-      reject(err);
-    }
-  });
-};
-
 export const initAuth = (
   onAuthSuccess?: (user: AuthenticatedGoogleUser, token: string | null) => void,
   onAuthFailure?: () => void
 ) => {
+  // Check if session had saved user
+  try {
+    const savedUserJson = sessionStorage.getItem(USER_STORAGE_KEY);
+    const savedToken = sessionStorage.getItem(TOKEN_STORAGE_KEY);
+    if (savedUserJson && savedToken && onAuthSuccess) {
+      const savedUser = JSON.parse(savedUserJson);
+      onAuthSuccess(savedUser, savedToken);
+    }
+  } catch {
+    // Ignore storage parse errors
+  }
+
   return onAuthStateChanged(auth, async (user: User | null) => {
     if (user) {
+      const authUser: AuthenticatedGoogleUser = {
+        uid: user.uid,
+        displayName: user.displayName || 'Graphics Punching',
+        email: user.email || TARGET_EMAIL,
+        photoURL: user.photoURL
+      };
       if (onAuthSuccess) {
-        onAuthSuccess(
-          {
-            uid: user.uid,
-            displayName: user.displayName,
-            email: user.email,
-            photoURL: user.photoURL
-          },
-          cachedAccessToken
-        );
+        onAuthSuccess(authUser, cachedAccessToken);
       }
     } else {
       if (!cachedAccessToken) {
@@ -141,79 +86,123 @@ export const initAuth = (
   });
 };
 
-export const googleSignIn = async (): Promise<{ 
+/**
+ * Sign in using Firebase Auth GoogleAuthProvider popup.
+ * Routes authentication through the authorized authDomain (firebaseapp.com),
+ * avoiding the "Error 400: origin_mismatch" caused by direct GSI calls on preview URLs.
+ */
+export const googleSignIn = async (hintEmail: string = TARGET_EMAIL): Promise<{ 
   user: AuthenticatedGoogleUser; 
   accessToken: string 
 }> => {
   isSigningIn = true;
 
-  // 1. Try Google Identity Services (GSI) first if loaded (bypasses Firebase Auth user disable limitations)
-  if (window.google?.accounts?.oauth2) {
-    try {
-      const gsiResult = await signInWithGSI();
-      return gsiResult;
-    } catch (gsiError: any) {
-      console.warn('GSI login failed or popup dismissed:', gsiError);
-      if (
-        gsiError?.message?.includes('closed') ||
-        gsiError?.message?.includes('denied') ||
-        gsiError?.message?.includes('cancelled')
-      ) {
-        throw gsiError;
-      }
-    }
-  }
+  provider.setCustomParameters({
+    prompt: 'select_account',
+    login_hint: hintEmail
+  });
 
-  // 2. Fallback to Firebase Auth popup
   try {
     const result = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     
     if (!credential?.accessToken) {
-      throw new Error('Google sign-in completed, but no Gmail access token was returned. Please ensure popups and permissions are allowed.');
+      throw new Error('Google sign-in succeeded, but no Gmail access token was returned. Please ensure you grant Gmail send and read permissions.');
     }
 
     cachedAccessToken = credential.accessToken;
+    const user: AuthenticatedGoogleUser = {
+      uid: result.user.uid,
+      displayName: result.user.displayName || 'Graphics Punching',
+      email: result.user.email || hintEmail,
+      photoURL: result.user.photoURL
+    };
+
+    try {
+      sessionStorage.setItem(TOKEN_STORAGE_KEY, cachedAccessToken);
+      sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+    } catch {
+      // Storage might be restricted in some sandboxed iframes
+    }
+
     return { 
-      user: {
-        uid: result.user.uid,
-        displayName: result.user.displayName,
-        email: result.user.email,
-        photoURL: result.user.photoURL
-      }, 
+      user, 
       accessToken: cachedAccessToken 
     };
   } catch (error: any) {
     console.error('Firebase Google Sign-In error:', error);
 
-    // If Firebase reports user-disabled, automatically try GSI OAuth client
-    if (error?.code === 'auth/user-disabled' || error?.message?.includes('user-disabled')) {
-      if (window.google?.accounts?.oauth2) {
-        return await signInWithGSI();
-      }
-      throw new Error('Google authentication account restriction detected. Please try signing in again with the Google authorization prompt.');
+    if (error?.code === 'auth/popup-blocked') {
+      throw new Error(
+        'The sign-in popup was blocked by your browser. Please allow popups for this site, or open the app in a new tab and try again.'
+      );
+    } else if (error?.code === 'auth/popup-closed-by-user') {
+      throw new Error(
+        'Sign-in was closed before completion. Please click "Connect Gmail" again and select ' + hintEmail + '.'
+      );
+    } else if (error?.code === 'auth/cancelled-popup-request') {
+      throw new Error('A sign-in popup was already open. Please complete authorization in that popup.');
+    } else if (error?.code === 'auth/unauthorized-domain') {
+      throw new Error(
+        'This domain is not yet authorized in Firebase Auth. Please open the app in a new tab or contact support.'
+      );
     }
 
-    if (error?.code === 'auth/popup-closed-by-user') {
-      throw new Error('Sign-in popup was closed before completing authentication. Please try again.');
-    } else if (error?.code === 'auth/cancelled-popup-request') {
-      throw new Error('Multiple popups opened. Please complete sign in.');
-    }
-    
-    throw error;
+    throw new Error(error?.message || 'Failed to authenticate with Google. Please try again.');
   } finally {
     isSigningIn = false;
   }
 };
 
+/**
+ * Connect with a direct OAuth access token (useful for manual token setup or testing)
+ */
+export const connectWithManualToken = (
+  token: string,
+  email: string = TARGET_EMAIL,
+  name: string = 'Graphics Punching'
+): { user: AuthenticatedGoogleUser; accessToken: string } => {
+  cachedAccessToken = token;
+  const user: AuthenticatedGoogleUser = {
+    uid: 'manual_' + Date.now(),
+    displayName: name,
+    email: email,
+    photoURL: undefined
+  };
+
+  try {
+    sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+    sessionStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+  } catch {
+    // Ignore storage issues
+  }
+
+  return { user, accessToken: token };
+};
+
 export const getCachedAccessToken = (): string | null => {
-  return cachedAccessToken;
+  if (cachedAccessToken) return cachedAccessToken;
+  try {
+    return sessionStorage.getItem(TOKEN_STORAGE_KEY) || null;
+  } catch {
+    return null;
+  }
 };
 
 export const getActiveAccessToken = getCachedAccessToken;
 
 export const setCachedAccessToken = (token: string | null) => {
   cachedAccessToken = token;
+  try {
+    if (token) {
+      sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+    } else {
+      sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+      sessionStorage.removeItem(USER_STORAGE_KEY);
+    }
+  } catch {
+    // Ignore storage issues
+  }
 };
 
 export const setActiveAccessToken = setCachedAccessToken;
@@ -224,7 +213,7 @@ export const logout = async () => {
   } catch (e) {
     console.warn('Firebase signout error:', e);
   }
-  cachedAccessToken = null;
+  setCachedAccessToken(null);
 };
 
 export const logOutFromGoogle = logout;

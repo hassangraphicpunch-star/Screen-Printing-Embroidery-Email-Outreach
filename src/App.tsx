@@ -47,6 +47,7 @@ import {
   Info,
   Inbox,
   MessageSquare,
+  ExternalLink,
 } from 'lucide-react';
 
 const INITIAL_SAMPLE_REPLIES: EmailReply[] = [
@@ -232,7 +233,7 @@ export default function App() {
           user: {
             uid: user.uid,
             email: user.email || SENDER_EMAIL,
-            displayName: user.displayName || 'Hassan Graphic',
+            displayName: user.displayName || 'Graphics Punching',
             photoURL: user.photoURL || undefined,
           },
           accessToken: token,
@@ -265,7 +266,7 @@ export default function App() {
           user: {
             uid: res.user.uid,
             email: res.user.email || SENDER_EMAIL,
-            displayName: res.user.displayName || 'Hassan Graphic',
+            displayName: res.user.displayName || 'Graphics Punching',
             photoURL: res.user.photoURL || undefined,
           },
           accessToken: res.accessToken,
@@ -756,12 +757,26 @@ Website: https://graphicspunching.com`,
               </div>
             </div>
 
-            <button
-              onClick={handleConnectGmail}
-              className="px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-500 rounded-xl shadow-md shadow-red-900/30 transition-all whitespace-nowrap cursor-pointer"
-            >
-              Connect Gmail Account
-            </button>
+            <div className="flex items-center space-x-2.5 flex-shrink-0">
+              <a
+                href={window.location.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center space-x-1.5 px-3 py-2 text-xs font-semibold text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl border border-slate-700 transition-colors"
+                title="If your browser blocks popup windows in the iframe preview, open in a full window tab"
+              >
+                <span>Open in Tab</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+
+              <button
+                onClick={handleConnectGmail}
+                disabled={authState.isLoading}
+                className="inline-flex items-center space-x-2 px-4 py-2 text-xs font-bold text-white bg-red-600 hover:bg-red-500 rounded-xl shadow-md shadow-red-900/30 transition-all whitespace-nowrap cursor-pointer disabled:opacity-50"
+              >
+                <span>Connect Gmail Account</span>
+              </button>
+            </div>
           </div>
         )}
 
