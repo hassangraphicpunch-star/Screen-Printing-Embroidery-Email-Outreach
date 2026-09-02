@@ -1,0 +1,6 @@
+{
+  "name": "Screen Printing & Embroidery Email Outreach",
+  "description": "Professional outreach platform for vectorization and embroidery digitizing services with Gmail OAuth and Excel contact management.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
