@@ -326,7 +326,7 @@ export default function App() {
     if (!authState.accessToken) {
       setNotification({
         type: 'info',
-        message: 'Please connect your Gmail account to sync real-time replies.',
+        message: 'Please connect graphicspunching264@gmail.com to sync real-time replies.',
       });
       return;
     }
@@ -338,7 +338,7 @@ export default function App() {
         setReplies(fetched);
         setNotification({
           type: 'success',
-          message: `Synced ${fetched.length} replies & message threads from Gmail inbox!`,
+          message: `Synced ${fetched.length} replies & message threads for graphicspunching264@gmail.com!`,
         });
       } else {
         setNotification({
@@ -556,7 +556,7 @@ export default function App() {
     const newLogs: SendLogEntry[] = [];
 
     const sender = authState.user?.email || SENDER_EMAIL;
-    const senderName = authState.user?.displayName || 'Hassan Graphic Punch';
+    const senderName = authState.user?.displayName || 'Graphics Punching';
 
     for (let i = 0; i < total; i++) {
       if (cancelBatchRef.current) break;
@@ -884,6 +884,8 @@ Website: https://graphicspunching.com`,
             onRefreshReplies={handleRefreshReplies}
             isAuthenticated={authState.isAuthenticated}
             accessToken={authState.accessToken}
+            senderEmail={authState.user?.email || SENDER_EMAIL}
+            onConnectGmail={handleConnectGmail}
             onSelectContact={handleSelectContactFromReply}
             onRepliesUpdated={(updated) => setReplies(updated)}
           />
